@@ -1,0 +1,40 @@
+{
+  "name": "hashdup-cli",
+  "version": "1.0.0",
+  "description": "Lightning-fast, memory-efficient duplicate and zero-byte file finder powered by SHA-256 stream hashing.",
+  "type": "module",
+  "main": "src/scanner.js",
+  "bin": {
+    "hashdup": "./bin/hashdup.js"
+  },
+  "scripts": {
+    "start": "node ./bin/hashdup.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mahdyarmonfared/hashdup-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mahdyarmonfared/hashdup-cli/issues"
+  },
+  "homepage": "https://github.com/mahdyarmonfared/hashdup-cli#readme",
+  "keywords": [
+    "cli",
+    "duplicate-finder",
+    "hash",
+    "sha256",
+    "disk-cleaner",
+    "file-management",
+    "nodejs",
+    "developer-tools"
+  ],
+  "author": "Mahdyar Monfared (https://github.com/mahdyarmonfared)",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "cli-table3": "^0.6.5",
+    "commander": "^13.1.0",
+    "ora": "^8.2.0"
+  }
+}

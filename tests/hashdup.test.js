@@ -1,0 +1,60 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import { computeFileHash } from '../src/hasher.js';
+import { findDuplicates } from '../src/scanner.js';
+import { formatBytes } from '../src/formatter.js';
+
+test('computeFileHash returns valid SHA-256 hex string', async () => {
+  const tempFile = path.join(os.tmpdir(), `hash-test-${Date.now()}.txt`);
+  await fs.writeFile(tempFile, 'Hello Clean Code 2026');
+
+  try {
+    const hash = await computeFileHash(tempFile, 'sha256');
+    assert.equal(typeof hash, 'string');
+    assert.equal(hash.length, 64);
+  } finally {
+    await fs.unlink(tempFile);
+  }
+});
+
+test('formatBytes converts units correctly', () => {
+  assert.equal(formatBytes(0), '0 B');
+  assert.equal(formatBytes(512), '512 B');
+  assert.equal(formatBytes(2048), '2 KB');
+  assert.equal(formatBytes(10485760), '10 MB');
+});
+
+test('findDuplicates detects duplicate files and empty zero-byte files', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'hashdup-test-'));
+  const subDir = path.join(tempDir, 'subfolder');
+  await fs.mkdir(subDir);
+
+  try {
+    const content = 'Identical contents for testing duplicate detection.';
+    await fs.writeFile(path.join(tempDir, 'original.txt'), content);
+    await fs.writeFile(path.join(subDir, 'copy.txt'), content);
+    await fs.writeFile(path.join(tempDir, 'unique.txt'), 'Totally different content');
+    await fs.writeFile(path.join(tempDir, 'empty.txt'), '');
+
+    const result = await findDuplicates(tempDir);
+
+    assert.equal(result.totalScanned, 4);
+    assert.equal(result.duplicateGroups.length, 1);
+    assert.equal(result.duplicateGroups[0].files.length, 2);
+    assert.equal(result.zeroByteFiles.length, 1);
+    assert.ok(result.totalWastedBytes > 0);
+
+    // Test moving to trash
+    const trashDir = path.join(tempDir, 'trash_bin');
+    const trashResult = await findDuplicates(tempDir, { trashDir });
+
+    assert.equal(trashResult.deletedFiles.length, 1);
+    const originalStillExists = await fs.stat(path.join(tempDir, 'original.txt')).then(() => true).catch(() => false);
+    assert.ok(originalStillExists, 'Original file must be preserved');
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
