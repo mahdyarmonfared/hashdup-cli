@@ -17,30 +17,39 @@ export function formatBytes(bytes) {
  * Render duplicate groups as a formatted CLI table
  */
 export function renderDuplicateTable(groups) {
-  if (groups.length === 0) return;
+  if (groups.length === 0) {
+    console.log('\n' + chalk.green('  ✨ No duplicate files found! All files have unique cryptographic hashes.'));
+    return;
+  }
 
   console.log(chalk.bold.cyan('\n🔍 Duplicate Files Found:'));
 
   const table = new Table({
     head: [
-      chalk.white('Group'),
-      chalk.white('Size (each)'),
-      chalk.white('Copies'),
-      chalk.white('Files (first is original, rest are duplicates)')
+      chalk.cyan('Group'),
+      chalk.cyan('Size'),
+      chalk.cyan('Copies'),
+      chalk.cyan('Files (✔ Preserved Original  •  ↳ Duplicates)')
     ],
-    colWidths: [8, 14, 10, 60],
+    chars: {
+      'top': '─', 'top-mid': '┬', 'top-left': '┌', 'top-right': '┐',
+      'bottom': '─', 'bottom-mid': '┴', 'bottom-left': '└', 'bottom-right': '┘',
+      'left': '│', 'left-mid': '├', 'mid': '─', 'mid-mid': '┼',
+      'right': '│', 'right-mid': '┤', 'middle': '│'
+    },
+    style: { head: [], border: ['gray'] },
     wordWrap: true
   });
 
   groups.forEach((group, index) => {
     const fileList = group.files
-      .map((f, i) => (i === 0 ? chalk.green(`[ORIGINAL] ${f}`) : chalk.yellow(`[DUP] ${f}`)))
+      .map((f, i) => (i === 0 ? `${chalk.green.bold('✔ KEEP')} ${chalk.white(f)}` : `${chalk.yellow.bold('↳ DUP ')} ${chalk.dim(f)}`))
       .join('\n');
 
     table.push([
       `#${index + 1}`,
-      formatBytes(group.size),
-      chalk.bold(group.files.length),
+      chalk.bold.white(formatBytes(group.size)),
+      chalk.bold.yellow(group.files.length),
       fileList
     ]);
   });
@@ -56,11 +65,11 @@ export function renderZeroByteTable(files) {
 
   console.log(chalk.bold.yellow(`\n⚠️  Empty (Zero-Byte) Files Found (${files.length}):`));
   files.slice(0, 15).forEach((f) => {
-    console.log(`  ${chalk.gray('•')} ${chalk.white(f)}`);
+    console.log(`  ${chalk.dim('•')} ${chalk.gray(f)}`);
   });
 
   if (files.length > 15) {
-    console.log(chalk.gray(`  ... and ${files.length - 15} more empty files.`));
+    console.log(chalk.dim(`  ... and ${files.length - 15} more empty files.`));
   }
 }
 
@@ -68,13 +77,14 @@ export function renderZeroByteTable(files) {
  * Render final statistics banner
  */
 export function renderSummary({ totalScanned, duplicateGroups, zeroByteCount, totalWastedBytes }) {
-  console.log('\n' + chalk.bold.cyan('━'.repeat(55)));
-  console.log(chalk.bold.cyan('  📊 HashDup Scan Summary'));
-  console.log(chalk.bold.cyan('━'.repeat(55)));
+  console.log('\n' + chalk.dim('╭─ ') + chalk.bold.cyan('HashDup Scan Summary ') + chalk.dim('─'.repeat(27) + '╮'));
 
-  console.log(`  📁 Total Files Scanned  : ${chalk.bold.white(totalScanned)}`);
-  console.log(`  👥 Duplicate Groups     : ${chalk.bold.yellow(duplicateGroups.length)}`);
-  console.log(`  🗑️  Zero-Byte Files      : ${chalk.bold.yellow(zeroByteCount)}`);
-  console.log(`  💾 Wasted Disk Space    : ${chalk.bold.red(formatBytes(totalWastedBytes))}`);
-  console.log(chalk.bold.cyan('━'.repeat(55)) + '\n');
+  console.log(chalk.dim('│') + `  📁 Total Files Scanned : ${chalk.bold.white(totalScanned)}`);
+  console.log(chalk.dim('│') + `  👥 Duplicate Groups    : ${duplicateGroups.length > 0 ? chalk.bold.yellow(duplicateGroups.length) : chalk.green('0')}`);
+  console.log(chalk.dim('│') + `  🗑️  Zero-Byte Files     : ${zeroByteCount > 0 ? chalk.bold.yellow(zeroByteCount) : chalk.green('0')}`);
+
+  const wastedStr = totalWastedBytes > 0 ? chalk.bold.red(formatBytes(totalWastedBytes)) : chalk.bold.green('0 B (Clean)');
+  console.log(chalk.dim('│') + `  💾 Reclaimable Space   : ${wastedStr}`);
+
+  console.log(chalk.dim('╰' + '─'.repeat(49) + '╯\n'));
 }
