@@ -27,7 +27,7 @@ async function collectFiles(dirPath, filesList = []) {
     } else if (entry.isFile()) {
       try {
         const stat = await fs.stat(fullPath);
-        filesList.push({ path: fullPath, size: stat.size });
+        filesList.push({ path: fullPath, size: stat.size, mtimeMs: stat.mtimeMs });
       } catch {
         // Ignore files that cannot be accessed
       }
@@ -50,6 +50,7 @@ export async function findDuplicates(targetDir, options = {}) {
 
   const absoluteTarget = path.resolve(targetDir);
   const allFiles = await collectFiles(absoluteTarget);
+  const fileMetaMap = new Map(allFiles.map(f => [f.path, f.mtimeMs]));
 
   const zeroByteFiles = [];
   const sizeMap = new Map();
@@ -101,6 +102,16 @@ export async function findDuplicates(targetDir, options = {}) {
 
     for (const [hash, filePaths] of hashMap.entries()) {
       if (filePaths.length > 1) {
+        // Deterministic survivor selection:
+        // 1. Oldest modified file is preserved as the original (earliest mtime)
+        // 2. Tie-break lexicographically by path for 100% deterministic reproducibility across filesystems
+        filePaths.sort((a, b) => {
+          const timeA = fileMetaMap.get(a) || 0;
+          const timeB = fileMetaMap.get(b) || 0;
+          if (timeA !== timeB) return timeA - timeB;
+          return a.localeCompare(b);
+        });
+
         duplicateGroups.push({
           hash,
           size: candidate.size,

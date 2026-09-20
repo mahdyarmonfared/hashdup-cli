@@ -1,6 +1,6 @@
 {
   "name": "hashdup-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Lightning-fast, memory-efficient duplicate and zero-byte file finder powered by SHA-256 stream hashing.",
   "type": "module",
   "main": "src/scanner.js",

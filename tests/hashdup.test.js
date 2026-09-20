@@ -58,3 +58,29 @@ test('findDuplicates detects duplicate files and empty zero-byte files', async (
     await fs.rm(tempDir, { recursive: true, force: true });
   }
 });
+
+test('findDuplicates deterministically preserves the oldest file as original', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'hashdup-mtime-test-'));
+
+  try {
+    const filePathNewer = path.join(tempDir, 'file_newer.txt');
+    const filePathOlder = path.join(tempDir, 'file_older.txt');
+    const duplicateContent = 'Same content for mtime determinism test';
+
+    await fs.writeFile(filePathNewer, duplicateContent);
+    await fs.writeFile(filePathOlder, duplicateContent);
+
+    // Explicitly set older file's mtime to 1 hour ago
+    const oneHourAgo = new Date(Date.now() - 3600 * 1000);
+    await fs.utimes(filePathOlder, oneHourAgo, oneHourAgo);
+
+    const result = await findDuplicates(tempDir);
+    assert.equal(result.duplicateGroups.length, 1);
+
+    // Index 0 is the survivor original
+    const survivor = result.duplicateGroups[0].files[0];
+    assert.equal(survivor, filePathOlder, 'Oldest file by mtime must be chosen as the original survivor');
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
