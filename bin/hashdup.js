@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { Command } from 'commander';
 import chalk from 'chalk';
@@ -7,12 +8,13 @@ import ora from 'ora';
 import { findDuplicates } from '../src/scanner.js';
 import { renderDuplicateTable, renderZeroByteTable, renderSummary } from '../src/formatter.js';
 
+const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf-8'));
 const program = new Command();
 
 program
   .name('hashdup')
   .description('⚡ Lightning-fast duplicate and zero-byte file finder powered by cryptographic hash streams.')
-  .version('1.0.0')
+  .version(pkg.version)
   .argument('[directory]', 'Directory to scan recursively', '.')
   .option('-a, --algo <algorithm>', 'Hash algorithm to use (sha256 or md5)', 'sha256')
   .option('-t, --trash <folder>', 'Safely move duplicate copies to a trash folder instead of deleting')
@@ -21,7 +23,7 @@ program
   .action(async (directory, options) => {
     const targetDir = path.resolve(directory);
 
-    console.log(chalk.bold.cyan('\n🔍 HashDup v1.0.0'));
+    console.log(chalk.bold.cyan(`\n🔍 HashDup v${pkg.version}`));
     console.log(chalk.gray(`Scanning target: ${targetDir}`));
     console.log(chalk.gray(`Algorithm: ${options.algo.toUpperCase()}\n`));
 
