@@ -84,3 +84,34 @@ test('findDuplicates deterministically preserves the oldest file as original', a
     await fs.rm(tempDir, { recursive: true, force: true });
   }
 });
+
+test('findDuplicates avoids overwriting identical basenames when moving to trashDir', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'hashdup-trash-test-'));
+  const subDir1 = path.join(tempDir, 'sub1');
+  const subDir2 = path.join(tempDir, 'sub2');
+  const trashDir = path.join(tempDir, 'my_trash');
+  await fs.mkdir(subDir1);
+  await fs.mkdir(subDir2);
+
+  try {
+    const content = 'Exact duplicate content across folders';
+    await fs.writeFile(path.join(tempDir, 'file.txt'), content);
+    await fs.writeFile(path.join(subDir1, 'file.txt'), content);
+    await fs.writeFile(path.join(subDir2, 'file.txt'), content);
+
+    const result = await findDuplicates(tempDir, { trashDir });
+
+    assert.equal(result.duplicateGroups.length, 1);
+    assert.equal(result.duplicateGroups[0].files.length, 3);
+    assert.equal(result.deletedFiles.length, 2);
+
+    // Verify trash contains both moved files without overwriting
+    const trashFiles = await fs.readdir(trashDir);
+    assert.equal(trashFiles.length, 2);
+    assert.ok(trashFiles.includes('file.txt'));
+    assert.ok(trashFiles.includes('file (1).txt'));
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+

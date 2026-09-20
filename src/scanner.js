@@ -38,6 +38,48 @@ async function collectFiles(dirPath, filesList = []) {
 }
 
 /**
+ * Safely move a file across devices (handles EXDEV errors)
+ */
+export async function safeMoveFile(source, destination) {
+  try {
+    await fs.rename(source, destination);
+  } catch (err) {
+    if (err.code === 'EXDEV') {
+      await fs.copyFile(source, destination);
+      await fs.unlink(source);
+    } else {
+      throw err;
+    }
+  }
+}
+
+/**
+ * Generate collision-safe path in trash directory
+ */
+export async function getUniqueTrashPath(targetDir, fileName) {
+  let dest = path.join(targetDir, fileName);
+  try {
+    await fs.access(dest);
+  } catch {
+    return dest;
+  }
+
+  const ext = path.extname(fileName);
+  const base = path.basename(fileName, ext);
+  let counter = 1;
+
+  while (true) {
+    dest = path.join(targetDir, `${base} (${counter})${ext}`);
+    try {
+      await fs.access(dest);
+      counter++;
+    } catch {
+      return dest;
+    }
+  }
+}
+
+/**
  * Main scanner function with two-phase detection (size filtering + stream hashing)
  */
 export async function findDuplicates(targetDir, options = {}) {
@@ -135,8 +177,8 @@ export async function findDuplicates(targetDir, options = {}) {
       for (const dupPath of duplicatesToRemove) {
         try {
           if (trashDir) {
-            const destPath = path.join(trashDir, path.basename(dupPath));
-            await fs.rename(dupPath, destPath);
+            const destPath = await getUniqueTrashPath(trashDir, path.basename(dupPath));
+            await safeMoveFile(dupPath, destPath);
           } else if (deleteDuplicates) {
             await fs.unlink(dupPath);
           }
