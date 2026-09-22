@@ -81,6 +81,7 @@ hashdup [directory] [options]
 | `--trash <folder>`| `-t` | Move duplicates to a safe trash folder instead of deleting |
 | `--delete` | | Permanently remove duplicate copies (preserves first original) |
 | `--no-zero` | | Do not report empty zero-byte files |
+| `--web [port]` | | Launch browser-based duplicate finder (default: 3000) |
 | `--help` | `-h` | Display help message |
 | `--version` | `-V` | Output version number |
 
