@@ -42,32 +42,34 @@ Most duplicate finder scripts try to load full files into memory, which crashes 
 
 ## 🚀 Quick Start
 
-### Installation
+### Installation & Global Setup
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/mahdyarmonfared/hashdup-cli.git
 cd hashdup-cli
 
-# Install dependencies
+# 2. Install dependencies
 npm install
 
-# Link globally (optional)
+# 3. Link globally (so you can use `hashdup` anywhere in your terminal)
 npm link
 ```
 
-### Direct Run
+### Running HashDup
 
 ```bash
 # Scan current directory
-node bin/hashdup.js
+hashdup .
 
-# Scan specific folder (e.g. Pictures)
-node bin/hashdup.js ~/Pictures
+# Scan specific folder (e.g. Pictures or Downloads)
+hashdup ~/Pictures
 
 # Launch interactive in-browser duplicate finder
-node bin/hashdup.js --web
+hashdup --web
 ```
+
+> 💡 **Tip:** You can also run it directly inside the repo without linking using `node bin/hashdup.js [options]`.
 
 ---
 
