@@ -209,9 +209,37 @@ exportReportBtn.addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
-clearBtn.addEventListener('click', () => {
+function clearAll() {
   duplicateResults = null;
   metricsGrid.classList.add('hidden');
   resultsSection.classList.add('hidden');
   fileInput.value = '';
-});
+}
+
+clearBtn.addEventListener('click', clearAll);
+
+const toolbarClearBtn = document.getElementById('toolbarClearBtn');
+if (toolbarClearBtn) {
+  toolbarClearBtn.addEventListener('click', clearAll);
+}
+
+// Quick Demo Generator
+const loadDemoBtn = document.getElementById('loadDemoBtn');
+if (loadDemoBtn) {
+  loadDemoBtn.addEventListener('click', () => {
+    const identicalText1 = 'CRITICAL REPORT CONTENT 2026: Quarterly Financial Statement and Projections.';
+    const identicalImagePayload = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]); // sample PNG header bytes
+
+    const demoFiles = [
+      new File([identicalText1], 'Q3_Financial_Statement.pdf', { type: 'application/pdf', lastModified: 1726000000000 }),
+      new File([identicalText1], 'Q3_Financial_Statement (Copy).pdf', { type: 'application/pdf', lastModified: 1726100000000 }),
+      new File([identicalText1], 'backup_copy_statement.pdf', { type: 'application/pdf', lastModified: 1726200000000 }),
+      new File([identicalImagePayload], 'hero_marketing_banner.png', { type: 'image/png', lastModified: 1726050000000 }),
+      new File([identicalImagePayload], 'hero_marketing_banner_final.png', { type: 'image/png', lastModified: 1726080000000 }),
+      new File(['completely unique file content for analytics dashboard'], 'analytics_pipeline.py', { type: 'text/x-python', lastModified: 1726090000000 }),
+    ];
+
+    processFiles(demoFiles);
+  });
+}
+

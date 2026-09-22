@@ -13,7 +13,18 @@
 
   <header class="header">
     <div class="brand">
-      <span class="brand-icon">🔍</span>
+      <div class="brand-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+          <defs>
+            <linearGradient id="hashGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#38bdf8"/>
+              <stop offset="100%" stop-color="#8b5cf6"/>
+            </linearGradient>
+          </defs>
+          <rect x="3" y="3" width="12" height="12" rx="3" stroke="url(#hashGrad)" stroke-width="1.8" fill="rgba(56, 189, 248, 0.15)"/>
+          <rect x="9" y="9" width="12" height="12" rx="3" stroke="#8b5cf6" stroke-width="1.8" fill="rgba(139, 92, 246, 0.2)"/>
+        </svg>
+      </div>
       <div>
         <h1 class="brand-title">HashDup</h1>
         <p class="brand-tagline">Client-Side Duplicate & Zero-Byte File Finder</p>
@@ -31,11 +42,25 @@
   </header>
 
   <main class="container">
+    <!-- Quick Demo Toolbar -->
+    <div class="toolbar">
+      <div class="demo-buttons">
+        <span class="toolbar-label">Quick Demo:</span>
+        <button type="button" class="btn btn-outline" id="loadDemoBtn">📥 Load Duplicate Files Demo</button>
+      </div>
+      <button type="button" class="clear-btn" id="toolbarClearBtn">Clear</button>
+    </div>
+
     <!-- Drop Zone -->
     <section class="drop-zone" id="dropZone">
       <input type="file" id="fileInput" multiple class="file-input">
       <div class="drop-content">
-        <div class="drop-icon">📂</div>
+        <div class="drop-icon">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" stroke="#38bdf8"/>
+            <circle cx="12" cy="13" r="3" stroke="#8b5cf6"/>
+          </svg>
+        </div>
         <h2 class="drop-title">Drop files or folder here to detect duplicates</h2>
         <p class="drop-desc">or <span class="highlight">browse files</span> from your computer</p>
         <p class="drop-hints">Files are hashed locally using hardware-accelerated SHA-256. Nothing is uploaded to any server.</p>
