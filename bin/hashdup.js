@@ -20,7 +20,17 @@ program
   .option('-t, --trash <folder>', 'Safely move duplicate copies to a trash folder instead of deleting')
   .option('--delete', 'Permanently delete duplicate copies (WARNING: irreversible)')
   .option('--no-zero', 'Do not report zero-byte empty files')
+  .option('--web [port]', 'Launch browser Web UI locally')
   .action(async (directory, options) => {
+    if (options.web || directory === 'web') {
+      const { startWebServer } = await import('../src/server.js');
+      const port = typeof options.web === 'string' || typeof options.web === 'number'
+        ? parseInt(options.web, 10)
+        : 3000;
+      await startWebServer({ port });
+      return;
+    }
+
     const targetDir = path.resolve(directory);
 
     console.log(chalk.bold.cyan(`\n🔍 HashDup v${pkg.version}`));

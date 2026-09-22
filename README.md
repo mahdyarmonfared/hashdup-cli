@@ -60,6 +60,9 @@ node bin/hashdup.js
 
 # Scan specific folder (e.g. Pictures)
 node bin/hashdup.js ~/Pictures
+
+# Launch interactive in-browser duplicate finder
+node bin/hashdup.js --web
 ```
 
 ---
