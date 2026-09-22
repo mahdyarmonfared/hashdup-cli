@@ -12,6 +12,8 @@
 
 </div>
 
+> 🌟 **Real-World Security Impact**: HashDup's deterministic deduplication architecture inspired an official security guardrail extension for [Hashgraph Online's HOL Guard (PR #3018)](https://github.com/hashgraph-online/hol-guard/pull/3018) to prevent autonomous AI agents from deleting critical user files in terminal workflows.
+
 ---
 
 ## 🧐 Why HashDup?
@@ -30,9 +32,11 @@ Most duplicate finder scripts try to load full files into memory, which crashes 
 
 - 🚀 **Two-Phase Smart Scan:** Hashing is only performed when file sizes match.
 - 🌊 **Stream-Based Hashing:** Zero RAM bottleneck, handles multi-gigabyte files with ease.
+- 🎯 **Deterministic Survivor Selection:** Protects your data by reliably preserving the oldest original file (`mtime` first, with lexical path tie-breaker).
 - 🗑️ **Zero-Byte File Audit:** Detects corrupt or empty files cluttering your filesystem.
-- 🛡️ **Safe Trash Option (`-t`):** Move duplicate copies to an isolated `.trash` folder instead of permanent deletion.
-- 📊 **Beautiful Terminal Tables:** Detailed group breakdown, wasted storage statistics, and path previews.
+- 🛡️ **Safe Trash Option (`-t`):** Move duplicate copies to an isolated `.trash` folder with collision-safe renaming instead of permanent deletion.
+- 🌐 **Interactive Web Finder (`--web`):** Drag-and-drop web UI with instant client-side Web Crypto SHA-256 analysis and zero uploads.
+- 📊 **Beautiful Terminal Tables:** Detailed group breakdown, wasted storage statistics, and status badges (`KEEP` vs `DUP`).
 
 ---
 
