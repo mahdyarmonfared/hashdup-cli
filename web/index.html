@@ -141,9 +141,9 @@
           <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Review identified clusters, clean duplicates safely to trash, or undo anytime.</p>
         </div>
         <div class="results-actions">
-          <button type="button" class="btn btn-clean" id="cleanFromResultsBtn" style="display:none">⚡ Move Duplicates to Trash</button>
-          <button type="button" class="btn btn-clean-zero" id="cleanZeroFromResultsBtn" style="display:none">🗑️ Clean 0B Files</button>
-          <button type="button" class="btn btn-undo" id="undoFromResultsBtn" style="display:none">↩️ Undo Clean</button>
+          <button type="button" class="btn btn-clean" id="cleanFromResultsBtn">⚡ Move Duplicates to Trash</button>
+          <button type="button" class="btn btn-clean-zero" id="cleanZeroFromResultsBtn">🗑️ Clean 0B Files</button>
+          <button type="button" class="btn btn-undo" id="undoFromResultsBtn">↩️ Undo Clean</button>
           <button type="button" class="btn btn-clean" id="downloadCleanZipBtn" style="display:none">📦 Download Unique Files (ZIP)</button>
           <button type="button" class="btn btn-primary" id="exportReportBtn">💾 Export Report (JSON)</button>
           <button type="button" class="btn btn-outline" id="clearBtn">Clear All</button>
@@ -161,7 +161,7 @@
             <h3>🗑️ Empty (Zero-Byte) Files</h3>
             <span class="zero-bytes-badge" id="zeroBytesBadge">0 Files</span>
           </div>
-          <button type="button" class="btn btn-clean-zero" id="cleanZeroSectionBtn" style="display:none">🗑️ Clean Empty Files</button>
+          <button type="button" class="btn btn-clean-zero" id="cleanZeroSectionBtn">🗑️ Clean Empty Files</button>
         </div>
         <div class="zero-bytes-list" id="zeroBytesList"></div>
       </div>

@@ -195,9 +195,14 @@ async function scanDiskFolder() {
 }
 
 async function cleanDiskDuplicates(cleanZeroBytes = false) {
-  const targetDir = targetDirInput.value.trim() || (duplicateResults && duplicateResults.targetDir);
+  let targetDir = targetDirInput.value.trim() || (duplicateResults && duplicateResults.targetDir);
+  if (!targetDir && defaultPaths && (defaultPaths.defaultDownloads || defaultPaths.homeDir)) {
+    targetDir = defaultPaths.defaultDownloads || defaultPaths.homeDir;
+    if (targetDirInput) targetDirInput.value = targetDir;
+  }
   if (!targetDir) {
-    alert('Please enter or select a directory path.');
+    showDiskStatus('⚠️ Please enter or select a folder path on your computer in the box above.', 'error');
+    if (targetDirInput) targetDirInput.focus();
     return;
   }
 
@@ -233,7 +238,7 @@ async function cleanDiskDuplicates(cleanZeroBytes = false) {
       const inlineUndoBtn = document.getElementById('inlineUndoBtn');
       if (inlineUndoBtn) inlineUndoBtn.addEventListener('click', undoDiskClean);
     } else {
-      showDiskStatus('✨ No duplicate files needed cleaning.', 'success');
+      showDiskStatus('✨ No duplicate files needed cleaning. Folder is already clean!', 'success');
     }
 
     await scanDiskFolder();
@@ -248,8 +253,16 @@ async function cleanDiskDuplicates(cleanZeroBytes = false) {
 }
 
 async function undoDiskClean() {
-  const targetDir = targetDirInput.value.trim() || (duplicateResults && duplicateResults.targetDir);
-  if (!targetDir) return;
+  let targetDir = targetDirInput.value.trim() || (duplicateResults && duplicateResults.targetDir);
+  if (!targetDir && defaultPaths && (defaultPaths.defaultDownloads || defaultPaths.homeDir)) {
+    targetDir = defaultPaths.defaultDownloads || defaultPaths.homeDir;
+    if (targetDirInput) targetDirInput.value = targetDir;
+  }
+  if (!targetDir) {
+    showDiskStatus('⚠️ Please enter or select a folder path to undo previous cleaning.', 'error');
+    if (targetDirInput) targetDirInput.focus();
+    return;
+  }
 
   const undoButtons = [undoDiskBtn, undoFromResultsBtn].filter(Boolean);
   const prevTexts = new Map();
@@ -583,18 +596,18 @@ function renderDashboard(data) {
     downloadCleanZipBtn.style.display = (!data.isDiskScan && data.duplicateGroups.length > 0) ? 'inline-block' : 'none';
   }
 
-  // Toggle Action Buttons in Duplicate Groups Header
+  // Action Buttons in Duplicate Groups Header - Always visible in results section!
   if (cleanFromResultsBtn) {
-    cleanFromResultsBtn.style.display = (data.isDiskScan && data.totalDuplicateFiles > 0) ? 'inline-block' : 'none';
+    cleanFromResultsBtn.style.display = 'inline-block';
   }
   if (cleanZeroFromResultsBtn) {
-    cleanZeroFromResultsBtn.style.display = (data.isDiskScan && data.zeroBytes && data.zeroBytes.length > 0) ? 'inline-block' : 'none';
+    cleanZeroFromResultsBtn.style.display = 'inline-block';
   }
   if (undoFromResultsBtn) {
-    undoFromResultsBtn.style.display = data.isDiskScan ? 'inline-block' : 'none';
+    undoFromResultsBtn.style.display = 'inline-block';
   }
   if (cleanZeroSectionBtn) {
-    cleanZeroSectionBtn.style.display = (data.isDiskScan && data.zeroBytes && data.zeroBytes.length > 0) ? 'inline-block' : 'none';
+    cleanZeroSectionBtn.style.display = 'inline-block';
   }
 
   clustersContainer.innerHTML = '';
