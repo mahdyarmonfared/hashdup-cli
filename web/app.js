@@ -1,8 +1,24 @@
 /**
  * HashDup Web UI
- * 100% Client-Side In-Browser Duplicate File Finder using Web Crypto SHA-256
+ * Complete CLI / Web Parity:
+ * - Direct Computer Folder Scan & Safe Trash Clean (.hashdup-trash) + Undo
+ * - 100% Client-Side In-Browser Duplicate File Finder using Web Crypto SHA-256
+ * - Two-Phase Optimization (Size filtering + Streaming crypto hash)
+ * - Zero-Byte Empty Files Detection & Cleanup
+ * - Download Cleaned ZIP (Originals Only)
  */
 
+// Disk Panel Elements
+const targetDirInput = document.getElementById('targetDirInput');
+const presetDownloads = document.getElementById('presetDownloads');
+const presetDesktop = document.getElementById('presetDesktop');
+const scanDiskBtn = document.getElementById('scanDiskBtn');
+const cleanDiskBtn = document.getElementById('cleanDiskBtn');
+const cleanZeroBtn = document.getElementById('cleanZeroBtn');
+const undoDiskBtn = document.getElementById('undoDiskBtn');
+const diskStatusMsg = document.getElementById('diskStatusMsg');
+
+// Client-Side Dropzone Elements
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const folderInput = document.getElementById('folderInput');
@@ -13,18 +29,29 @@ const progressTitle = document.getElementById('progressTitle');
 const progressPercent = document.getElementById('progressPercent');
 const progressFill = document.getElementById('progressFill');
 
+// Metrics Elements
 const metricsGrid = document.getElementById('metricsGrid');
 const statScanned = document.getElementById('statScanned');
 const statClusters = document.getElementById('statClusters');
 const statDuplicates = document.getElementById('statDuplicates');
+const statZeroBytes = document.getElementById('statZeroBytes');
 const statWasted = document.getElementById('statWasted');
 
+// Results Elements
 const resultsSection = document.getElementById('resultsSection');
 const clustersContainer = document.getElementById('clustersContainer');
+const zeroBytesSection = document.getElementById('zeroBytesSection');
+const zeroBytesBadge = document.getElementById('zeroBytesBadge');
+const zeroBytesList = document.getElementById('zeroBytesList');
 const exportReportBtn = document.getElementById('exportReportBtn');
+const downloadCleanZipBtn = document.getElementById('downloadCleanZipBtn');
 const clearBtn = document.getElementById('clearBtn');
+const toolbarClearBtn = document.getElementById('toolbarClearBtn');
+const loadDemoBtn = document.getElementById('loadDemoBtn');
 
 let duplicateResults = null;
+let currentClientFiles = [];
+let defaultPaths = {};
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return '0 B';
@@ -34,6 +61,15 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 async function computeSha256(file) {
   const buffer = await file.arrayBuffer();
   const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
@@ -41,7 +77,197 @@ async function computeSha256(file) {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Recursive entry reader for folder drag-and-drop
+function showDiskStatus(message, type = 'success') {
+  if (!diskStatusMsg) return;
+  diskStatusMsg.className = `disk-status-msg ${type}`;
+  diskStatusMsg.innerHTML = message;
+  diskStatusMsg.classList.remove('hidden');
+}
+
+// ----------------------------------------------------
+// System Status & Presets Integration
+// ----------------------------------------------------
+async function initSystemStatus() {
+  try {
+    const res = await fetch('/api/status');
+    if (res.ok) {
+      defaultPaths = await res.json();
+      if (targetDirInput && !targetDirInput.value) {
+        targetDirInput.value = defaultPaths.defaultDownloads || defaultPaths.homeDir || '';
+      }
+    }
+  } catch {
+    // Running in purely static environment
+  }
+}
+initSystemStatus();
+
+if (presetDownloads) {
+  presetDownloads.addEventListener('click', () => {
+    if (defaultPaths.defaultDownloads) {
+      targetDirInput.value = defaultPaths.defaultDownloads;
+      scanDiskFolder();
+    }
+  });
+}
+
+if (presetDesktop) {
+  presetDesktop.addEventListener('click', () => {
+    if (defaultPaths.defaultDesktop) {
+      targetDirInput.value = defaultPaths.defaultDesktop;
+      scanDiskFolder();
+    }
+  });
+}
+
+// ----------------------------------------------------
+// Direct Disk Scan, Clean, and Undo
+// ----------------------------------------------------
+async function scanDiskFolder() {
+  const targetDir = targetDirInput.value.trim();
+  if (!targetDir) {
+    alert('Please enter or select a directory path.');
+    return;
+  }
+
+  scanDiskBtn.disabled = true;
+  scanDiskBtn.textContent = 'Scanning...';
+
+  try {
+    const res = await fetch('/api/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetDir })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to scan directory');
+
+    let totalDuplicateFiles = 0;
+    data.duplicateGroups.forEach(g => {
+      totalDuplicateFiles += (g.files.length - 1);
+    });
+
+    duplicateResults = {
+      isDiskScan: true,
+      targetDir: data.targetDir,
+      totalScanned: data.totalScanned,
+      duplicateGroups: data.duplicateGroups.map(g => ({
+        hash: g.hash,
+        size: g.size,
+        files: g.files.map(filePath => ({
+          name: filePath.split('/').pop(),
+          fullPath: filePath,
+          size: g.size
+        }))
+      })),
+      zeroBytes: data.zeroByteFiles.map(filePath => ({
+        name: filePath.split('/').pop(),
+        fullPath: filePath,
+        size: 0
+      })),
+      totalDuplicateFiles,
+      totalWastedBytes: data.totalWastedBytes
+    };
+
+    if (totalDuplicateFiles > 0 || data.zeroByteFiles.length > 0) {
+      showDiskStatus(
+        `Found <strong>${totalDuplicateFiles}</strong> duplicate file(s) (${formatBytes(data.totalWastedBytes)} wasted) and <strong>${data.zeroByteFiles.length}</strong> zero-byte file(s) in <code>${escapeHtml(data.targetDir)}</code>.`,
+        'success'
+      );
+    } else {
+      showDiskStatus(
+        `🎉 Folder <code>${escapeHtml(data.targetDir)}</code> is completely clean! No duplicate or empty files found.`,
+        'success'
+      );
+    }
+
+    renderDashboard(duplicateResults);
+  } catch (err) {
+    showDiskStatus(`❌ Scan error: ${escapeHtml(err.message)}`, 'error');
+  } finally {
+    scanDiskBtn.disabled = false;
+    scanDiskBtn.textContent = '🔍 Scan Folder';
+  }
+}
+
+async function cleanDiskDuplicates(cleanZeroBytes = false) {
+  const targetDir = targetDirInput.value.trim();
+  if (!targetDir) {
+    alert('Please enter or select a directory path.');
+    return;
+  }
+
+  const btn = cleanZeroBytes ? cleanZeroBtn : cleanDiskBtn;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Moving to Trash...';
+
+  try {
+    const res = await fetch('/api/clean', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetDir, cleanZeroBytes })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to clean duplicates');
+
+    if (data.removedCount > 0) {
+      showDiskStatus(
+        `🛡️ <strong>Safely moved ${data.removedCount} file(s)</strong> to <code>${escapeHtml(data.trashDir)}</code>! <button type="button" class="preset-btn" style="margin-left:8px" id="inlineUndoBtn">↩️ Undo Clean</button>`,
+        'success'
+      );
+      const inlineUndoBtn = document.getElementById('inlineUndoBtn');
+      if (inlineUndoBtn) inlineUndoBtn.addEventListener('click', undoDiskClean);
+    } else {
+      showDiskStatus('✨ No duplicate files needed cleaning.', 'success');
+    }
+
+    await scanDiskFolder();
+  } catch (err) {
+    showDiskStatus(`❌ Error cleaning files: ${escapeHtml(err.message)}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+async function undoDiskClean() {
+  const targetDir = targetDirInput.value.trim();
+  if (!targetDir) return;
+
+  undoDiskBtn.disabled = true;
+  undoDiskBtn.textContent = 'Undoing...';
+
+  try {
+    const res = await fetch('/api/undo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetDir })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Undo failed');
+
+    showDiskStatus(
+      `✅ <strong>Successfully restored ${data.revertedCount} of ${data.totalCount} file(s)</strong> back to original locations!`,
+      'success'
+    );
+    await scanDiskFolder();
+  } catch (err) {
+    showDiskStatus(`❌ Undo error: ${escapeHtml(err.message)}`, 'error');
+  } finally {
+    undoDiskBtn.disabled = false;
+    undoDiskBtn.textContent = '↩️ Undo';
+  }
+}
+
+scanDiskBtn.addEventListener('click', scanDiskFolder);
+cleanDiskBtn.addEventListener('click', () => cleanDiskDuplicates(false));
+cleanZeroBtn.addEventListener('click', () => cleanDiskDuplicates(true));
+undoDiskBtn.addEventListener('click', undoDiskClean);
+
+// ----------------------------------------------------
+// Client-Side Drag & Drop (Two-Phase Optimization)
+// ----------------------------------------------------
 async function getAllFileEntries(dataTransferItemList) {
   const fileList = [];
   const queue = [];
@@ -84,7 +310,6 @@ async function getAllFileEntries(dataTransferItemList) {
   return fileList;
 }
 
-// Drag & drop handlers
 ['dragenter', 'dragover'].forEach(name => {
   dropZone.addEventListener(name, (e) => {
     e.preventDefault();
@@ -109,7 +334,6 @@ dropZone.addEventListener('drop', async (e) => {
   if (files.length > 0) processFiles(files);
 });
 
-// Click handlers for buttons & inputs
 browseFolderBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   folderInput.click();
@@ -138,26 +362,51 @@ fileInput.addEventListener('change', (e) => {
   fileInput.value = '';
 });
 
+/**
+ * Optimized Two-Phase File Processing:
+ * Phase 1: Group files by exact byte size.
+ * Phase 2: Compute SHA-256 hashes ONLY for files that share identical byte sizes!
+ */
 async function processFiles(files) {
+  currentClientFiles = files;
   progressCard.classList.remove('hidden');
   progressFill.style.width = '0%';
   progressPercent.textContent = '0%';
+  progressTitle.textContent = 'Grouping files by size (Phase 1)...';
 
-  const hashMap = new Map();
+  const sizeMap = new Map();
   const zeroBytes = [];
   const total = files.length;
 
   for (let i = 0; i < total; i++) {
     const file = files[i];
-    progressTitle.textContent = `Hashing ${file.name} (${i + 1}/${total})...`;
-    const pct = Math.round(((i + 1) / total) * 100);
-    progressPercent.textContent = `${pct}%`;
-    progressFill.style.width = `${pct}%`;
-
     if (file.size === 0) {
-      zeroBytes.push({ name: file.name, size: 0 });
+      zeroBytes.push({ name: file.name, size: 0, fullPath: file.webkitRelativePath || file.name });
       continue;
     }
+    if (!sizeMap.has(file.size)) {
+      sizeMap.set(file.size, []);
+    }
+    sizeMap.get(file.size).push(file);
+  }
+
+  // Filter candidates that share byte sizes
+  const candidates = [];
+  for (const [size, list] of sizeMap.entries()) {
+    if (list.length > 1) {
+      candidates.push(...list);
+    }
+  }
+
+  const hashMap = new Map();
+  const candidateCount = candidates.length;
+
+  for (let i = 0; i < candidateCount; i++) {
+    const file = candidates[i];
+    progressTitle.textContent = `Streaming SHA-256 for ${file.name} (${i + 1}/${candidateCount})...`;
+    const pct = Math.round(((i + 1) / candidateCount) * 100);
+    progressPercent.textContent = `${pct}%`;
+    progressFill.style.width = `${pct}%`;
 
     try {
       const hash = await computeSha256(file);
@@ -170,8 +419,10 @@ async function processFiles(files) {
       }
       hashMap.get(hash).files.push({
         name: file.name,
+        fullPath: file.webkitRelativePath || file.name,
         size: file.size,
-        lastModified: file.lastModified,
+        lastModified: file.lastModified || 0,
+        fileRef: file
       });
     } catch (err) {
       console.error('Failed to hash file:', file.name, err);
@@ -180,6 +431,14 @@ async function processFiles(files) {
 
   // Filter only duplicate groups (files.length > 1)
   const duplicateGroups = Array.from(hashMap.values()).filter(g => g.files.length > 1);
+
+  // Sort each group deterministically: oldest modified is original
+  duplicateGroups.forEach(g => {
+    g.files.sort((a, b) => {
+      if (a.lastModified !== b.lastModified) return a.lastModified - b.lastModified;
+      return a.name.localeCompare(b.name);
+    });
+  });
 
   let totalDuplicateFiles = 0;
   let totalWastedBytes = 0;
@@ -191,6 +450,7 @@ async function processFiles(files) {
   });
 
   duplicateResults = {
+    isDiskScan: false,
     totalScanned: total,
     duplicateGroups,
     zeroBytes,
@@ -202,6 +462,9 @@ async function processFiles(files) {
   renderDashboard(duplicateResults);
 }
 
+// ----------------------------------------------------
+// UI Dashboard Renderer
+// ----------------------------------------------------
 function renderDashboard(data) {
   metricsGrid.classList.remove('hidden');
   resultsSection.classList.remove('hidden');
@@ -209,7 +472,12 @@ function renderDashboard(data) {
   statScanned.textContent = data.totalScanned;
   statClusters.textContent = data.duplicateGroups.length;
   statDuplicates.textContent = data.totalDuplicateFiles;
+  if (statZeroBytes) statZeroBytes.textContent = data.zeroBytes.length;
   statWasted.textContent = formatBytes(data.totalWastedBytes);
+
+  if (downloadCleanZipBtn) {
+    downloadCleanZipBtn.style.display = (!data.isDiskScan && data.duplicateGroups.length > 0) ? 'inline-block' : 'none';
+  }
 
   clustersContainer.innerHTML = '';
 
@@ -220,55 +488,129 @@ function renderDashboard(data) {
         <p style="color: var(--text-muted); font-size: 13px; margin-top: 6px;">All ${data.totalScanned} scanned files have unique cryptographic SHA-256 signatures.</p>
       </div>
     `;
-    return;
-  }
+  } else {
+    data.duplicateGroups.forEach((group, idx) => {
+      const clusterCard = document.createElement('div');
+      clusterCard.className = 'cluster-card';
 
-  data.duplicateGroups.forEach((group, idx) => {
-    const clusterCard = document.createElement('div');
-    clusterCard.className = 'cluster-card';
+      const wastedForGroup = group.size * (group.files.length - 1);
 
-    const wastedForGroup = group.size * (group.files.length - 1);
+      let filesHtml = '';
+      group.files.forEach((f, fIdx) => {
+        const isOriginal = fIdx === 0;
+        const displayPath = f.fullPath || f.name;
+        filesHtml += `
+          <div class="cluster-file-item">
+            <span class="file-type-icon">${isOriginal ? '⭐' : '📋'}</span>
+            <span class="file-item-name" title="${escapeHtml(displayPath)}">
+              ${escapeHtml(displayPath)}
+            </span>
+            <span class="file-item-tag ${isOriginal ? 'tag-original' : 'tag-duplicate'}">
+              ${isOriginal ? '✔ KEEP Original' : '↳ DUP to Trash'}
+            </span>
+          </div>
+        `;
+      });
 
-    let filesHtml = '';
-    group.files.forEach((f, fIdx) => {
-      const isOriginal = fIdx === 0;
-      filesHtml += `
-        <div class="cluster-file-item">
-          <span class="file-type-icon">${isOriginal ? '⭐' : '📋'}</span>
-          <span class="file-item-name" title="${f.name}">${f.name}</span>
-          <span class="file-item-tag ${isOriginal ? 'tag-original' : 'tag-duplicate'}">
-            ${isOriginal ? 'Original' : 'Duplicate'}
-          </span>
+      clusterCard.innerHTML = `
+        <div class="cluster-header">
+          <span class="cluster-hash-badge">SHA-256: ${group.hash.slice(0, 16)}...</span>
+          <div>
+            <span style="font-size: 12px; color: var(--text-muted); margin-right: 8px;">Size per file: <strong>${formatBytes(group.size)}</strong></span>
+            <span class="cluster-wasted-badge">-${formatBytes(wastedForGroup)} Wasted</span>
+          </div>
+        </div>
+        <div class="cluster-files-list">
+          ${filesHtml}
         </div>
       `;
+
+      clustersContainer.appendChild(clusterCard);
+    });
+  }
+
+  // Render Zero-Byte Files Section
+  if (zeroBytesSection && zeroBytesList) {
+    if (data.zeroBytes && data.zeroBytes.length > 0) {
+      zeroBytesSection.classList.remove('hidden');
+      if (zeroBytesBadge) zeroBytesBadge.textContent = `${data.zeroBytes.length} Empty File(s)`;
+      zeroBytesList.innerHTML = '';
+      data.zeroBytes.forEach(zb => {
+        const item = document.createElement('div');
+        item.className = 'zero-byte-item';
+        item.innerHTML = `
+          <span>📄 <code>${escapeHtml(zb.fullPath || zb.name)}</code></span>
+          <span class="file-item-tag tag-duplicate">0 B • Empty</span>
+        `;
+        zeroBytesList.appendChild(item);
+      });
+    } else {
+      zeroBytesSection.classList.add('hidden');
+    }
+  }
+}
+
+// ----------------------------------------------------
+// Download Cleaned ZIP (Client-Side Mode)
+// ----------------------------------------------------
+if (downloadCleanZipBtn) {
+  downloadCleanZipBtn.addEventListener('click', async () => {
+    if (!currentClientFiles || currentClientFiles.length === 0 || !duplicateResults) return;
+
+    // Collect all duplicate file objects to exclude
+    const duplicateFileRefs = new Set();
+    duplicateResults.duplicateGroups.forEach(g => {
+      // Index 0 is original; index 1..N are duplicates
+      for (let i = 1; i < g.files.length; i++) {
+        if (g.files[i].fileRef) {
+          duplicateFileRefs.add(g.files[i].fileRef);
+        }
+      }
     });
 
-    clusterCard.innerHTML = `
-      <div class="cluster-header">
-        <span class="cluster-hash-badge">SHA-256: ${group.hash.slice(0, 16)}...</span>
-        <div>
-          <span style="font-size: 12px; color: var(--text-muted); margin-right: 8px;">Size per file: <strong>${formatBytes(group.size)}</strong></span>
-          <span class="cluster-wasted-badge">-${formatBytes(wastedForGroup)} Wasted</span>
-        </div>
-      </div>
-      <div class="cluster-files-list">
-        ${filesHtml}
-      </div>
-    `;
+    const originalText = downloadCleanZipBtn.textContent;
+    downloadCleanZipBtn.disabled = true;
+    downloadCleanZipBtn.textContent = '⏳ Creating Clean ZIP...';
 
-    clustersContainer.appendChild(clusterCard);
+    try {
+      const zip = new window.JSZip();
+
+      for (const file of currentClientFiles) {
+        if (!duplicateFileRefs.has(file)) {
+          const zipPath = file.webkitRelativePath || file.name;
+          zip.file(zipPath, file);
+        }
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(content);
+      link.download = 'HashDup_Clean_Unique_Files.zip';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (err) {
+      alert(`Failed to create ZIP: ${err.message}`);
+    } finally {
+      downloadCleanZipBtn.disabled = false;
+      downloadCleanZipBtn.textContent = originalText;
+    }
   });
 }
 
+// ----------------------------------------------------
+// Export JSON Report
+// ----------------------------------------------------
 exportReportBtn.addEventListener('click', () => {
   if (!duplicateResults) return;
 
   const data = JSON.stringify({
     timestamp: new Date().toISOString(),
+    target: duplicateResults.targetDir || 'In-Browser Upload',
     summary: {
       totalScanned: duplicateResults.totalScanned,
       duplicateClusters: duplicateResults.duplicateGroups.length,
       redundantCopies: duplicateResults.totalDuplicateFiles,
+      zeroByteCount: duplicateResults.zeroBytes.length,
       wastedBytes: duplicateResults.totalWastedBytes,
     },
     clusters: duplicateResults.duplicateGroups,
@@ -286,24 +628,23 @@ exportReportBtn.addEventListener('click', () => {
 
 function clearAll() {
   duplicateResults = null;
+  currentClientFiles = [];
   metricsGrid.classList.add('hidden');
   resultsSection.classList.add('hidden');
+  if (zeroBytesSection) zeroBytesSection.classList.add('hidden');
+  if (diskStatusMsg) diskStatusMsg.classList.add('hidden');
   fileInput.value = '';
+  folderInput.value = '';
 }
 
 clearBtn.addEventListener('click', clearAll);
-
-const toolbarClearBtn = document.getElementById('toolbarClearBtn');
-if (toolbarClearBtn) {
-  toolbarClearBtn.addEventListener('click', clearAll);
-}
+if (toolbarClearBtn) toolbarClearBtn.addEventListener('click', clearAll);
 
 // Quick Demo Generator
-const loadDemoBtn = document.getElementById('loadDemoBtn');
 if (loadDemoBtn) {
   loadDemoBtn.addEventListener('click', () => {
     const identicalText1 = 'CRITICAL REPORT CONTENT 2026: Quarterly Financial Statement and Projections.';
-    const identicalImagePayload = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]); // sample PNG header bytes
+    const identicalImagePayload = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);
 
     const demoFiles = [
       new File([identicalText1], 'Q3_Financial_Statement.pdf', { type: 'application/pdf', lastModified: 1726000000000 }),
@@ -312,16 +653,9 @@ if (loadDemoBtn) {
       new File([identicalImagePayload], 'hero_marketing_banner.png', { type: 'image/png', lastModified: 1726050000000 }),
       new File([identicalImagePayload], 'hero_marketing_banner_final.png', { type: 'image/png', lastModified: 1726080000000 }),
       new File(['completely unique file content for analytics dashboard'], 'analytics_pipeline.py', { type: 'text/x-python', lastModified: 1726090000000 }),
+      new File([''], 'empty_log_file.txt', { type: 'text/plain', lastModified: 1726095000000 }),
     ];
 
     processFiles(demoFiles);
   });
 }
-
-// Auto-trigger for URL query parameters (e.g. for screenshots)
-const params = new URLSearchParams(window.location.search);
-if (params.has('demo')) {
-  setTimeout(() => loadDemoBtn?.click(), 100);
-}
-
-

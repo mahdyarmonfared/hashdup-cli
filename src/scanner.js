@@ -16,7 +16,7 @@ async function collectFiles(dirPath, filesList = []) {
   }
 
   for (const entry of entries) {
-    if (IGNORE_DIRS.has(entry.name) || entry.name.startsWith('.trash')) {
+    if (IGNORE_DIRS.has(entry.name) || entry.name.startsWith('.trash') || entry.name.startsWith('.hashdup')) {
       continue;
     }
 
@@ -79,6 +79,84 @@ export async function getUniqueTrashPath(targetDir, fileName) {
   }
 }
 
+const HISTORY_FILE = '.hashdup-history.json';
+
+export async function saveTrashHistory(targetDir, moves) {
+  if (moves.length === 0) return;
+  const historyPath = path.join(targetDir, HISTORY_FILE);
+  let historyList = [];
+  try {
+    const data = await fs.readFile(historyPath, 'utf8');
+    historyList = JSON.parse(data);
+    if (!Array.isArray(historyList)) historyList = [];
+  } catch {
+    // History file does not exist yet
+  }
+
+  historyList.push({
+    timestamp: new Date().toISOString(),
+    moves
+  });
+
+  try {
+    await fs.writeFile(historyPath, JSON.stringify(historyList, null, 2), 'utf8');
+  } catch (err) {
+    console.error(`Failed to save trash history: ${err.message}`);
+  }
+}
+
+export async function undoLastTrash(targetDir) {
+  const absoluteTarget = path.resolve(targetDir);
+  const historyPath = path.join(absoluteTarget, HISTORY_FILE);
+
+  let historyList = [];
+  try {
+    const data = await fs.readFile(historyPath, 'utf8');
+    historyList = JSON.parse(data);
+  } catch {
+    return {
+      success: false,
+      message: 'No undo history found in this directory.'
+    };
+  }
+
+  if (!Array.isArray(historyList) || historyList.length === 0) {
+    return {
+      success: false,
+      message: 'No actions to undo.'
+    };
+  }
+
+  const lastAction = historyList.pop();
+  let revertedCount = 0;
+
+  for (const move of lastAction.moves) {
+    try {
+      await fs.access(move.trashPath);
+      await fs.mkdir(path.dirname(move.originalPath), { recursive: true });
+      await safeMoveFile(move.trashPath, move.originalPath);
+      revertedCount++;
+    } catch {
+      // Continue restoring other files
+    }
+  }
+
+  // Update history file
+  try {
+    if (historyList.length > 0) {
+      await fs.writeFile(historyPath, JSON.stringify(historyList, null, 2), 'utf8');
+    } else {
+      await fs.unlink(historyPath);
+    }
+  } catch {}
+
+  return {
+    success: true,
+    revertedCount,
+    totalCount: lastAction.moves.length
+  };
+}
+
 /**
  * Main scanner function with two-phase detection (size filtering + stream hashing)
  */
@@ -87,6 +165,7 @@ export async function findDuplicates(targetDir, options = {}) {
     algorithm = 'sha256',
     deleteDuplicates = false,
     trashDir = null,
+    cleanZeroBytes = false,
     onProgress = null
   } = options;
 
@@ -166,6 +245,8 @@ export async function findDuplicates(targetDir, options = {}) {
 
   // Phase 3: Action handling (delete or move to trash if requested)
   const deletedFiles = [];
+  const trashMoves = [];
+
   if (deleteDuplicates || trashDir) {
     if (trashDir) {
       await fs.mkdir(trashDir, { recursive: true });
@@ -179,6 +260,7 @@ export async function findDuplicates(targetDir, options = {}) {
           if (trashDir) {
             const destPath = await getUniqueTrashPath(trashDir, path.basename(dupPath));
             await safeMoveFile(dupPath, destPath);
+            trashMoves.push({ originalPath: dupPath, trashPath: destPath });
           } else if (deleteDuplicates) {
             await fs.unlink(dupPath);
           }
@@ -187,6 +269,28 @@ export async function findDuplicates(targetDir, options = {}) {
           // Handle file removal failure
         }
       }
+    }
+
+    // Clean zero-byte empty files if requested
+    if (cleanZeroBytes) {
+      for (const emptyPath of zeroByteFiles) {
+        try {
+          if (trashDir) {
+            const destPath = await getUniqueTrashPath(trashDir, path.basename(emptyPath));
+            await safeMoveFile(emptyPath, destPath);
+            trashMoves.push({ originalPath: emptyPath, trashPath: destPath, isZeroByte: true });
+          } else if (deleteDuplicates) {
+            await fs.unlink(emptyPath);
+          }
+          deletedFiles.push(emptyPath);
+        } catch {
+          // Ignore removal error
+        }
+      }
+    }
+
+    if (trashDir && trashMoves.length > 0) {
+      await saveTrashHistory(absoluteTarget, trashMoves);
     }
   }
 

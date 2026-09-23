@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { computeFileHash } from '../src/hasher.js';
-import { findDuplicates } from '../src/scanner.js';
+import { findDuplicates, undoLastTrash } from '../src/scanner.js';
 import { formatBytes } from '../src/formatter.js';
 
 test('computeFileHash returns valid SHA-256 hex string', async () => {
@@ -110,6 +110,48 @@ test('findDuplicates avoids overwriting identical basenames when moving to trash
     assert.equal(trashFiles.length, 2);
     assert.ok(trashFiles.includes('file.txt'));
     assert.ok(trashFiles.includes('file (1).txt'));
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('undoLastTrash safely restores files from trash back to their original locations', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'hashdup-undo-test-'));
+  const subDir = path.join(tempDir, 'nested');
+  const trashDir = path.join(tempDir, '.hashdup-trash');
+  await fs.mkdir(subDir);
+
+  try {
+    const content = 'Duplicate file content for undo test';
+    const originalFile = path.join(tempDir, 'original.txt');
+    const duplicateFile = path.join(subDir, 'copy.txt');
+
+    await fs.writeFile(originalFile, content);
+    await fs.writeFile(duplicateFile, content);
+
+    // Explicitly make originalFile older so it is deterministically preserved as survivor
+    const oneHourAgo = new Date(Date.now() - 3600 * 1000);
+    await fs.utimes(originalFile, oneHourAgo, oneHourAgo);
+
+    // 1. Move duplicate to trash
+    const scanResult = await findDuplicates(tempDir, { trashDir });
+    assert.equal(scanResult.deletedFiles.length, 1);
+
+    // Verify copy was moved out of nested folder
+    const copyExistsBeforeUndo = await fs.stat(duplicateFile).then(() => true).catch(() => false);
+    assert.equal(copyExistsBeforeUndo, false, 'Duplicate file should be moved away');
+
+    // 2. Perform Undo
+    const undoResult = await undoLastTrash(tempDir);
+    assert.equal(undoResult.success, true);
+    assert.equal(undoResult.revertedCount, 1);
+
+    // Verify copy is restored in original nested subfolder
+    const copyExistsAfterUndo = await fs.stat(duplicateFile).then(() => true).catch(() => false);
+    assert.equal(copyExistsAfterUndo, true, 'Duplicate file must be restored back to original location');
+
+    const restoredContent = await fs.readFile(duplicateFile, 'utf8');
+    assert.equal(restoredContent, content);
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }

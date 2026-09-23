@@ -7,6 +7,7 @@
   <meta name="description" content="Lightning-fast in-browser duplicate file finder using Web Crypto SHA-256 streams. 100% private and client-side.">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
   <div class="ambient-glow"></div>
@@ -49,6 +50,31 @@
         <button type="button" class="btn btn-outline" id="loadDemoBtn">📥 Load Duplicate Files Demo</button>
       </div>
       <button type="button" class="clear-btn" id="toolbarClearBtn">Clear</button>
+    </div>
+
+    <!-- Direct Disk Duplicate Finder & Cleaner Panel -->
+    <div class="disk-panel" id="diskPanel">
+      <div class="disk-panel-header">
+        <div class="disk-title">
+          <span class="disk-icon">🖥️</span>
+          <div>
+            <strong>Scan & Clean Folder on Computer</strong>
+            <p class="disk-subtitle">Directly finds duplicate files on disk with safe trash recovery</p>
+          </div>
+        </div>
+        <div class="disk-presets">
+          <button type="button" class="preset-btn" id="presetDownloads">📂 Downloads</button>
+          <button type="button" class="preset-btn" id="presetDesktop">🖥️ Desktop</button>
+        </div>
+      </div>
+      <div class="disk-input-row">
+        <input type="text" class="disk-path-input" id="targetDirInput" placeholder="Path to folder on disk (e.g. ~/Downloads)">
+        <button type="button" class="btn btn-outline" id="scanDiskBtn">🔍 Scan Folder</button>
+        <button type="button" class="btn btn-clean" id="cleanDiskBtn">⚡ Move Duplicates to Trash</button>
+        <button type="button" class="btn btn-clean-zero" id="cleanZeroBtn" title="Clean 0-byte empty files">🗑️ Clean 0B Files</button>
+        <button type="button" class="btn btn-undo" id="undoDiskBtn" title="Undo last clean operation">↩️ Undo</button>
+      </div>
+      <div class="disk-status-msg hidden" id="diskStatusMsg"></div>
     </div>
 
     <!-- Drop Zone -->
@@ -98,6 +124,10 @@
         <span class="metric-value text-red" id="statDuplicates">0</span>
       </div>
       <div class="metric-card">
+        <span class="metric-label">Empty Files (0 B)</span>
+        <span class="metric-value text-cyan" id="statZeroBytes">0</span>
+      </div>
+      <div class="metric-card">
         <span class="metric-label">Wasted Disk Space</span>
         <span class="metric-value text-green" id="statWasted">0 B</span>
       </div>
@@ -108,6 +138,7 @@
       <div class="results-header">
         <h2>Duplicate Groups</h2>
         <div class="results-actions">
+          <button type="button" class="btn btn-clean" id="downloadCleanZipBtn" style="display:none">📦 Download Unique Files (ZIP)</button>
           <button type="button" class="btn btn-primary" id="exportReportBtn">💾 Export Report (JSON)</button>
           <button type="button" class="btn btn-outline" id="clearBtn">Clear All</button>
         </div>
@@ -115,6 +146,15 @@
 
       <div class="clusters-container" id="clustersContainer">
         <!-- Rendered duplicate groups -->
+      </div>
+
+      <!-- Zero-Byte Files Section -->
+      <div class="zero-bytes-section hidden" id="zeroBytesSection">
+        <div class="zero-bytes-header">
+          <h3>🗑️ Empty (Zero-Byte) Files</h3>
+          <span class="zero-bytes-badge" id="zeroBytesBadge">0 Files</span>
+        </div>
+        <div class="zero-bytes-list" id="zeroBytesList"></div>
       </div>
     </section>
   </main>
