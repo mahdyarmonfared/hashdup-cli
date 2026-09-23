@@ -20,11 +20,11 @@ const MIME_TYPES = {
 /**
  * Start the built-in HashDup Web UI server.
  * @param {object} [options={}]
- * @param {number} [options.port=3000]
+ * @param {number} [options.port=3002]
  * @returns {Promise<http.Server>}
  */
 export function startWebServer(options = {}) {
-  const port = options.port || 3000;
+  const port = options.port || 3002;
 
   const server = http.createServer(async (req, res) => {
     try {

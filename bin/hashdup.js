@@ -26,7 +26,7 @@ program
       const { startWebServer } = await import('../src/server.js');
       const port = typeof options.web === 'string' || typeof options.web === 'number'
         ? parseInt(options.web, 10)
-        : 3000;
+        : 3002;
       await startWebServer({ port });
       return;
     }
