@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
 
 import os from 'node:os';
-import { findDuplicates, undoLastTrash } from './scanner.js';
+import { findDuplicates, undoLastTrash, safeMoveFile, getUniqueTrashPath, saveTrashHistory } from './scanner.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,6 +80,33 @@ export function startWebServer(options = {}) {
         const data = await readJsonBody(req);
         const target = path.resolve(data.targetDir || os.homedir());
         const trashDir = path.join(target, '.hashdup-trash');
+
+        if (Array.isArray(data.filePaths) && data.filePaths.length > 0) {
+          await fs.mkdir(trashDir, { recursive: true });
+          const trashMoves = [];
+          for (const filePath of data.filePaths) {
+            try {
+              const destPath = await getUniqueTrashPath(trashDir, path.basename(filePath));
+              await safeMoveFile(filePath, destPath);
+              trashMoves.push({ originalPath: filePath, trashPath: destPath });
+            } catch {
+              // Ignore failure
+            }
+          }
+          if (trashMoves.length > 0) {
+            await saveTrashHistory(target, trashMoves);
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: true,
+            targetDir: target,
+            trashDir,
+            removedCount: trashMoves.length,
+            deletedFiles: trashMoves.map(m => m.originalPath)
+          }));
+          return;
+        }
+
         const results = await findDuplicates(target, {
           algorithm: data.algorithm || 'sha256',
           trashDir,

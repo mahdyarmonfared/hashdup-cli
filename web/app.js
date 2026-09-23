@@ -40,6 +40,10 @@ const statWasted = document.getElementById('statWasted');
 // Results Elements
 const resultsSection = document.getElementById('resultsSection');
 const clustersContainer = document.getElementById('clustersContainer');
+const cleanFromResultsBtn = document.getElementById('cleanFromResultsBtn');
+const cleanZeroFromResultsBtn = document.getElementById('cleanZeroFromResultsBtn');
+const undoFromResultsBtn = document.getElementById('undoFromResultsBtn');
+const cleanZeroSectionBtn = document.getElementById('cleanZeroSectionBtn');
 const zeroBytesSection = document.getElementById('zeroBytesSection');
 const zeroBytesBadge = document.getElementById('zeroBytesBadge');
 const zeroBytesList = document.getElementById('zeroBytesList');
@@ -191,16 +195,26 @@ async function scanDiskFolder() {
 }
 
 async function cleanDiskDuplicates(cleanZeroBytes = false) {
-  const targetDir = targetDirInput.value.trim();
+  const targetDir = targetDirInput.value.trim() || (duplicateResults && duplicateResults.targetDir);
   if (!targetDir) {
     alert('Please enter or select a directory path.');
     return;
   }
 
-  const btn = cleanZeroBytes ? cleanZeroBtn : cleanDiskBtn;
-  const originalText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Moving to Trash...';
+  const buttonsToDisable = [
+    cleanDiskBtn,
+    cleanZeroBtn,
+    cleanFromResultsBtn,
+    cleanZeroFromResultsBtn,
+    cleanZeroSectionBtn
+  ].filter(Boolean);
+
+  const prevTexts = new Map();
+  buttonsToDisable.forEach(b => {
+    prevTexts.set(b, b.textContent);
+    b.disabled = true;
+    b.textContent = 'Moving to Trash...';
+  });
 
   try {
     const res = await fetch('/api/clean', {
@@ -226,17 +240,24 @@ async function cleanDiskDuplicates(cleanZeroBytes = false) {
   } catch (err) {
     showDiskStatus(`❌ Error cleaning files: ${escapeHtml(err.message)}`, 'error');
   } finally {
-    btn.disabled = false;
-    btn.textContent = originalText;
+    buttonsToDisable.forEach(b => {
+      b.disabled = false;
+      if (prevTexts.has(b)) b.textContent = prevTexts.get(b);
+    });
   }
 }
 
 async function undoDiskClean() {
-  const targetDir = targetDirInput.value.trim();
+  const targetDir = targetDirInput.value.trim() || (duplicateResults && duplicateResults.targetDir);
   if (!targetDir) return;
 
-  undoDiskBtn.disabled = true;
-  undoDiskBtn.textContent = 'Undoing...';
+  const undoButtons = [undoDiskBtn, undoFromResultsBtn].filter(Boolean);
+  const prevTexts = new Map();
+  undoButtons.forEach(b => {
+    prevTexts.set(b, b.textContent);
+    b.disabled = true;
+    b.textContent = 'Undoing...';
+  });
 
   try {
     const res = await fetch('/api/undo', {
@@ -255,8 +276,78 @@ async function undoDiskClean() {
   } catch (err) {
     showDiskStatus(`❌ Undo error: ${escapeHtml(err.message)}`, 'error');
   } finally {
-    undoDiskBtn.disabled = false;
-    undoDiskBtn.textContent = '↩️ Undo';
+    undoButtons.forEach(b => {
+      b.disabled = false;
+      if (prevTexts.has(b)) b.textContent = prevTexts.get(b);
+    });
+  }
+}
+
+async function cleanClusterGroup(group, btnElement) {
+  const targetDir = targetDirInput.value.trim() || (duplicateResults && duplicateResults.targetDir);
+  if (!targetDir) {
+    alert('No folder selected.');
+    return;
+  }
+  const duplicatePaths = group.files.slice(1).map(f => f.fullPath).filter(Boolean);
+  if (duplicatePaths.length === 0) return;
+
+  const originalText = btnElement.textContent;
+  btnElement.disabled = true;
+  btnElement.textContent = 'Moving...';
+
+  try {
+    const res = await fetch('/api/clean', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetDir, filePaths: duplicatePaths })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to move cluster duplicates');
+
+    showDiskStatus(
+      `🛡️ <strong>Moved ${data.removedCount} duplicate(s)</strong> of group <code>${escapeHtml(group.hash.slice(0, 8))}</code> to Trash! <button type="button" class="preset-btn" style="margin-left:8px" id="inlineUndoBtn">↩️ Undo Clean</button>`,
+      'success'
+    );
+    const inlineUndoBtn = document.getElementById('inlineUndoBtn');
+    if (inlineUndoBtn) inlineUndoBtn.addEventListener('click', undoDiskClean);
+
+    await scanDiskFolder();
+  } catch (err) {
+    showDiskStatus(`❌ Error moving cluster duplicates: ${escapeHtml(err.message)}`, 'error');
+    btnElement.disabled = false;
+    btnElement.textContent = originalText;
+  }
+}
+
+async function cleanSingleFile(filePath, btnElement) {
+  const targetDir = targetDirInput.value.trim() || (duplicateResults && duplicateResults.targetDir);
+  if (!targetDir || !filePath) return;
+
+  btnElement.disabled = true;
+  btnElement.textContent = '...';
+
+  try {
+    const res = await fetch('/api/clean', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetDir, filePaths: [filePath] })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to move file');
+
+    showDiskStatus(
+      `🛡️ Moved duplicate file <code>${escapeHtml(filePath.split('/').pop())}</code> to Trash. <button type="button" class="preset-btn" style="margin-left:8px" id="inlineUndoBtn">↩️ Undo Clean</button>`,
+      'success'
+    );
+    const inlineUndoBtn = document.getElementById('inlineUndoBtn');
+    if (inlineUndoBtn) inlineUndoBtn.addEventListener('click', undoDiskClean);
+
+    await scanDiskFolder();
+  } catch (err) {
+    showDiskStatus(`❌ Error moving file: ${escapeHtml(err.message)}`, 'error');
+    btnElement.disabled = false;
+    btnElement.textContent = '🗑️ Trash';
   }
 }
 
@@ -264,6 +355,19 @@ scanDiskBtn.addEventListener('click', scanDiskFolder);
 cleanDiskBtn.addEventListener('click', () => cleanDiskDuplicates(false));
 cleanZeroBtn.addEventListener('click', () => cleanDiskDuplicates(true));
 undoDiskBtn.addEventListener('click', undoDiskClean);
+
+if (cleanFromResultsBtn) {
+  cleanFromResultsBtn.addEventListener('click', () => cleanDiskDuplicates(false));
+}
+if (cleanZeroFromResultsBtn) {
+  cleanZeroFromResultsBtn.addEventListener('click', () => cleanDiskDuplicates(true));
+}
+if (undoFromResultsBtn) {
+  undoFromResultsBtn.addEventListener('click', undoDiskClean);
+}
+if (cleanZeroSectionBtn) {
+  cleanZeroSectionBtn.addEventListener('click', () => cleanDiskDuplicates(true));
+}
 
 // ----------------------------------------------------
 // Client-Side Drag & Drop (Two-Phase Optimization)
@@ -479,6 +583,20 @@ function renderDashboard(data) {
     downloadCleanZipBtn.style.display = (!data.isDiskScan && data.duplicateGroups.length > 0) ? 'inline-block' : 'none';
   }
 
+  // Toggle Action Buttons in Duplicate Groups Header
+  if (cleanFromResultsBtn) {
+    cleanFromResultsBtn.style.display = (data.isDiskScan && data.totalDuplicateFiles > 0) ? 'inline-block' : 'none';
+  }
+  if (cleanZeroFromResultsBtn) {
+    cleanZeroFromResultsBtn.style.display = (data.isDiskScan && data.zeroBytes && data.zeroBytes.length > 0) ? 'inline-block' : 'none';
+  }
+  if (undoFromResultsBtn) {
+    undoFromResultsBtn.style.display = data.isDiskScan ? 'inline-block' : 'none';
+  }
+  if (cleanZeroSectionBtn) {
+    cleanZeroSectionBtn.style.display = (data.isDiskScan && data.zeroBytes && data.zeroBytes.length > 0) ? 'inline-block' : 'none';
+  }
+
   clustersContainer.innerHTML = '';
 
   if (data.duplicateGroups.length === 0) {
@@ -508,16 +626,28 @@ function renderDashboard(data) {
             <span class="file-item-tag ${isOriginal ? 'tag-original' : 'tag-duplicate'}">
               ${isOriginal ? '✔ KEEP Original' : '↳ DUP to Trash'}
             </span>
+            ${(!isOriginal && data.isDiskScan) ? `
+              <button type="button" class="btn-clean-single-file" data-cluster-idx="${idx}" data-file-idx="${fIdx}" title="Move only this duplicate to trash">
+                🗑️ Trash
+              </button>
+            ` : ''}
           </div>
         `;
       });
 
       clusterCard.innerHTML = `
         <div class="cluster-header">
-          <span class="cluster-hash-badge">SHA-256: ${group.hash.slice(0, 16)}...</span>
-          <div>
-            <span style="font-size: 12px; color: var(--text-muted); margin-right: 8px;">Size per file: <strong>${formatBytes(group.size)}</strong></span>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span class="cluster-hash-badge">SHA-256: ${group.hash.slice(0, 16)}...</span>
+            <span style="font-size: 12px; color: var(--text-muted);">Size per file: <strong>${formatBytes(group.size)}</strong></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <span class="cluster-wasted-badge">-${formatBytes(wastedForGroup)} Wasted</span>
+            ${data.isDiskScan ? `
+              <button type="button" class="btn-clean-group" data-cluster-idx="${idx}" title="Safely move duplicates in this group to trash">
+                🗑️ Trash Group Duplicates (${group.files.length - 1})
+              </button>
+            ` : ''}
           </div>
         </div>
         <div class="cluster-files-list">
@@ -527,6 +657,28 @@ function renderDashboard(data) {
 
       clustersContainer.appendChild(clusterCard);
     });
+
+    // Attach event listeners for group clean and single file clean
+    if (data.isDiskScan) {
+      clustersContainer.querySelectorAll('.btn-clean-group').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const clusterIdx = parseInt(btn.dataset.clusterIdx, 10);
+          const group = data.duplicateGroups[clusterIdx];
+          if (group) cleanClusterGroup(group, btn);
+        });
+      });
+
+      clustersContainer.querySelectorAll('.btn-clean-single-file').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const clusterIdx = parseInt(btn.dataset.clusterIdx, 10);
+          const fileIdx = parseInt(btn.dataset.fileIdx, 10);
+          const group = data.duplicateGroups[clusterIdx];
+          if (group && group.files[fileIdx]) {
+            cleanSingleFile(group.files[fileIdx].fullPath, btn);
+          }
+        });
+      });
+    }
   }
 
   // Render Zero-Byte Files Section
@@ -633,6 +785,11 @@ function clearAll() {
   resultsSection.classList.add('hidden');
   if (zeroBytesSection) zeroBytesSection.classList.add('hidden');
   if (diskStatusMsg) diskStatusMsg.classList.add('hidden');
+  if (cleanFromResultsBtn) cleanFromResultsBtn.style.display = 'none';
+  if (cleanZeroFromResultsBtn) cleanZeroFromResultsBtn.style.display = 'none';
+  if (undoFromResultsBtn) undoFromResultsBtn.style.display = 'none';
+  if (cleanZeroSectionBtn) cleanZeroSectionBtn.style.display = 'none';
+  if (downloadCleanZipBtn) downloadCleanZipBtn.style.display = 'none';
   fileInput.value = '';
   folderInput.value = '';
 }
