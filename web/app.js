@@ -5,6 +5,9 @@
 
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
+const folderInput = document.getElementById('folderInput');
+const browseFolderBtn = document.getElementById('browseFolderBtn');
+const browseFilesBtn = document.getElementById('browseFilesBtn');
 const progressCard = document.getElementById('progressCard');
 const progressTitle = document.getElementById('progressTitle');
 const progressPercent = document.getElementById('progressPercent');
@@ -38,6 +41,49 @@ async function computeSha256(file) {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Recursive entry reader for folder drag-and-drop
+async function getAllFileEntries(dataTransferItemList) {
+  const fileList = [];
+  const queue = [];
+
+  for (let i = 0; i < dataTransferItemList.length; i++) {
+    const item = dataTransferItemList[i];
+    if (item.webkitGetAsEntry) {
+      const entry = item.webkitGetAsEntry();
+      if (entry) queue.push(entry);
+    } else if (item.getAsFile) {
+      const file = item.getAsFile();
+      if (file) fileList.push(file);
+    }
+  }
+
+  while (queue.length > 0) {
+    const entry = queue.shift();
+    if (entry.isFile) {
+      await new Promise((resolve) => {
+        entry.file((file) => {
+          fileList.push(file);
+          resolve();
+        }, () => resolve());
+      });
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const readBatch = () => new Promise((resolve) => {
+        reader.readEntries((entries) => resolve(entries), () => resolve([]));
+      });
+      let entries;
+      do {
+        entries = await readBatch();
+        for (const child of entries) {
+          queue.push(child);
+        }
+      } while (entries && entries.length > 0);
+    }
+  }
+
+  return fileList;
+}
+
 // Drag & drop handlers
 ['dragenter', 'dragover'].forEach(name => {
   dropZone.addEventListener(name, (e) => {
@@ -53,14 +99,43 @@ async function computeSha256(file) {
   });
 });
 
-dropZone.addEventListener('drop', (e) => {
-  const files = Array.from(e.dataTransfer.files);
+dropZone.addEventListener('drop', async (e) => {
+  let files = [];
+  if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+    files = await getAllFileEntries(e.dataTransfer.items);
+  } else if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    files = Array.from(e.dataTransfer.files);
+  }
   if (files.length > 0) processFiles(files);
+});
+
+// Click handlers for buttons & inputs
+browseFolderBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  folderInput.click();
+});
+
+browseFilesBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  fileInput.click();
+});
+
+dropZone.addEventListener('click', (e) => {
+  if (!e.target.closest('button')) {
+    folderInput.click();
+  }
+});
+
+folderInput.addEventListener('change', (e) => {
+  const files = Array.from(e.target.files);
+  if (files.length > 0) processFiles(files);
+  folderInput.value = '';
 });
 
 fileInput.addEventListener('change', (e) => {
   const files = Array.from(e.target.files);
   if (files.length > 0) processFiles(files);
+  fileInput.value = '';
 });
 
 async function processFiles(files) {

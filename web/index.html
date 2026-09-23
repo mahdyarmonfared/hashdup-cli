@@ -53,7 +53,8 @@
 
     <!-- Drop Zone -->
     <section class="drop-zone" id="dropZone">
-      <input type="file" id="fileInput" multiple class="file-input">
+      <input type="file" id="fileInput" multiple class="hidden-input" style="display:none">
+      <input type="file" id="folderInput" webkitdirectory directory multiple class="hidden-input" style="display:none">
       <div class="drop-content">
         <div class="drop-icon">
           <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -61,9 +62,13 @@
             <circle cx="12" cy="13" r="3" stroke="#8b5cf6"/>
           </svg>
         </div>
-        <h2 class="drop-title">Drop files or folder here to detect duplicates</h2>
-        <p class="drop-desc">or <span class="highlight">browse files</span> from your computer</p>
-        <p class="drop-hints">Files are hashed locally using hardware-accelerated SHA-256. Nothing is uploaded to any server.</p>
+        <h2 class="drop-title">Drop files or entire folder to detect duplicates</h2>
+        <p class="drop-desc">or choose directly from your computer:</p>
+        <div class="drop-actions">
+          <button type="button" class="btn btn-browse" id="browseFolderBtn">📁 Select Entire Folder</button>
+          <button type="button" class="btn btn-browse-secondary" id="browseFilesBtn">📄 Select Files</button>
+        </div>
+        <p class="drop-hints">Drag & drop supports folders recursively. Hashed locally with Web Crypto SHA-256.</p>
       </div>
     </section>
 
