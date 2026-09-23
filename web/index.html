@@ -68,21 +68,21 @@
         </div>
       </div>
       <div class="disk-input-row">
-        <input type="text" class="disk-path-input" id="targetDirInput" placeholder="Path to folder on disk (e.g. ~/Downloads)">
+        <input type="text" class="disk-path-input" id="targetDirInput" placeholder="Path to folder on disk (e.g. ~/Downloads)" aria-label="Target folder path">
         <button type="button" class="btn btn-outline" id="scanDiskBtn">🔍 Scan Folder</button>
         <button type="button" class="btn btn-clean" id="cleanDiskBtn">⚡ Move Duplicates to Trash</button>
-        <button type="button" class="btn btn-clean-zero" id="cleanZeroBtn" title="Clean 0-byte empty files">🗑️ Clean 0B Files</button>
+        <button type="button" class="btn btn-clean-zero" id="cleanZeroBtn" title="Clean 0-byte empty files">🗑️ Clean Empty Files</button>
         <button type="button" class="btn btn-undo" id="undoDiskBtn" title="Undo last clean operation">↩️ Undo</button>
       </div>
-      <div class="disk-status-msg hidden" id="diskStatusMsg"></div>
+      <div class="disk-status-msg hidden" id="diskStatusMsg" role="status" aria-live="polite"></div>
     </div>
 
     <!-- Drop Zone -->
-    <section class="drop-zone" id="dropZone">
-      <input type="file" id="fileInput" multiple class="hidden-input" style="display:none">
-      <input type="file" id="folderInput" webkitdirectory directory multiple class="hidden-input" style="display:none">
+    <section class="drop-zone" id="dropZone" role="region" aria-label="File and folder drop zone">
+      <input type="file" id="fileInput" multiple class="hidden-input" style="display:none" aria-label="Choose files">
+      <input type="file" id="folderInput" webkitdirectory directory multiple class="hidden-input" style="display:none" aria-label="Choose folder">
       <div class="drop-content">
-        <div class="drop-icon">
+        <div class="drop-icon" aria-hidden="true">
           <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" stroke="#38bdf8"/>
             <circle cx="12" cy="13" r="3" stroke="#8b5cf6"/>
@@ -94,14 +94,14 @@
           <button type="button" class="btn btn-browse" id="browseFolderBtn">📁 Select Entire Folder</button>
           <button type="button" class="btn btn-browse-secondary" id="browseFilesBtn">📄 Select Files</button>
         </div>
-        <p class="drop-hints">Drag & drop supports folders recursively. Hashed locally with Web Crypto SHA-256.</p>
+        <p class="drop-hints">Supports recursive folder scanning. Cryptographically hashed client-side with SHA-256.</p>
       </div>
     </section>
 
     <!-- Progress Indicator -->
-    <div class="progress-card hidden" id="progressCard">
+    <div class="progress-card hidden" id="progressCard" role="progressbar" aria-label="Hashing progress">
       <div class="progress-header">
-        <span class="progress-title" id="progressTitle">Hashing files...</span>
+        <span class="progress-title" id="progressTitle">Hashing files…</span>
         <span class="progress-percent" id="progressPercent">0%</span>
       </div>
       <div class="progress-bar">
@@ -142,7 +142,7 @@
         </div>
         <div class="results-actions">
           <button type="button" class="btn btn-clean" id="cleanFromResultsBtn">⚡ Move Duplicates to Trash</button>
-          <button type="button" class="btn btn-clean-zero" id="cleanZeroFromResultsBtn">🗑️ Clean 0B Files</button>
+          <button type="button" class="btn btn-clean-zero" id="cleanZeroFromResultsBtn">🗑️ Clean Empty Files</button>
           <button type="button" class="btn btn-undo" id="undoFromResultsBtn">↩️ Undo Clean</button>
           <button type="button" class="btn btn-clean" id="downloadCleanZipBtn" style="display:none">📦 Download Unique Files (ZIP)</button>
           <button type="button" class="btn btn-primary" id="exportReportBtn">💾 Export Report (JSON)</button>

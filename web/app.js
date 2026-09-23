@@ -135,7 +135,7 @@ async function scanDiskFolder() {
   }
 
   scanDiskBtn.disabled = true;
-  scanDiskBtn.textContent = 'Scanning...';
+  scanDiskBtn.textContent = '🔍 Scanning…';
 
   try {
     const res = await fetch('/api/scan', {
@@ -218,7 +218,7 @@ async function cleanDiskDuplicates(cleanZeroBytes = false) {
   buttonsToDisable.forEach(b => {
     prevTexts.set(b, b.textContent);
     b.disabled = true;
-    b.textContent = 'Moving to Trash...';
+    b.textContent = '⚡ Moving to Trash…';
   });
 
   try {
@@ -269,7 +269,7 @@ async function undoDiskClean() {
   undoButtons.forEach(b => {
     prevTexts.set(b, b.textContent);
     b.disabled = true;
-    b.textContent = 'Undoing...';
+    b.textContent = '↩️ Undoing…';
   });
 
   try {
@@ -368,6 +368,15 @@ scanDiskBtn.addEventListener('click', scanDiskFolder);
 cleanDiskBtn.addEventListener('click', () => cleanDiskDuplicates(false));
 cleanZeroBtn.addEventListener('click', () => cleanDiskDuplicates(true));
 undoDiskBtn.addEventListener('click', undoDiskClean);
+
+if (targetDirInput) {
+  targetDirInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      scanDiskFolder();
+    }
+  });
+}
 
 if (cleanFromResultsBtn) {
   cleanFromResultsBtn.addEventListener('click', () => cleanDiskDuplicates(false));
@@ -651,7 +660,9 @@ function renderDashboard(data) {
       clusterCard.innerHTML = `
         <div class="cluster-header">
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span class="cluster-hash-badge">SHA-256: ${group.hash.slice(0, 16)}...</span>
+            <button type="button" class="cluster-hash-badge copy-hash-btn" data-hash="${escapeHtml(group.hash)}" title="Click to copy full SHA-256 hash" style="cursor: pointer; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 6px; padding: 2px 8px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--accent-cyan);">
+              📋 SHA-256: ${group.hash.slice(0, 14)}…
+            </button>
             <span style="font-size: 12px; color: var(--text-muted);">Size per file: <strong>${formatBytes(group.size)}</strong></span>
           </div>
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -669,6 +680,23 @@ function renderDashboard(data) {
       `;
 
       clustersContainer.appendChild(clusterCard);
+    });
+
+    // Attach copy-hash handlers
+    clustersContainer.querySelectorAll('.copy-hash-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const hash = btn.dataset.hash;
+        if (hash) {
+          try {
+            await navigator.clipboard.writeText(hash);
+            const orig = btn.innerHTML;
+            btn.innerHTML = '✔ Copied SHA-256!';
+            setTimeout(() => { btn.innerHTML = orig; }, 1800);
+          } catch (err) {
+            console.error('Clipboard copy failed:', err);
+          }
+        }
+      });
     });
 
     // Attach event listeners for group clean and single file clean
